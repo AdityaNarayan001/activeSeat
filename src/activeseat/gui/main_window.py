@@ -21,7 +21,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (
     QMainWindow, QSplitter, QWidget, QVBoxLayout, QTabWidget,
-    QStatusBar, QProgressBar, QFileDialog, QMessageBox, QApplication,
+    QStatusBar, QFileDialog, QMessageBox, QApplication,
 )
 
 from .param_panel import ParamPanel
@@ -134,11 +134,6 @@ class MainWindow(QMainWindow):
     def _build_statusbar(self):
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setVisible(False)
-        self.progress_bar.setMaximumWidth(200)
-        self.status_bar.addPermanentWidget(self.progress_bar)
         self.status_bar.showMessage("Ready — load a scenario or click Run.")
 
     # ------------------------------------------------------------------
@@ -200,8 +195,6 @@ class MainWindow(QMainWindow):
 
         self.param_panel.set_run_enabled(False)
         self.param_panel.set_progress(0, "Starting…")
-        self.progress_bar.setValue(0)
-        self.progress_bar.setVisible(True)
         self.status_bar.showMessage("Running simulation…")
         self._worker.start()
 
@@ -210,15 +203,13 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def _on_progress(self, val: float):
-        self.progress_bar.setValue(int(val))
         self.param_panel.set_progress(val)
 
     def _on_stage(self, label: str):
-        self.param_panel.set_progress(self.progress_bar.value(), label)
+        self.param_panel.set_progress(self.param_panel.progress_bar.value(), label)
         self.status_bar.showMessage(label)
 
     def _on_finished(self, data: dict):
-        self.progress_bar.setVisible(False)
         self.param_panel.set_run_enabled(True)
         task_type = data.get("type", "")
 
