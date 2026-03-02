@@ -9,11 +9,11 @@ from __future__ import annotations
 
 from typing import Callable, Optional
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QFormLayout,
     QDoubleSpinBox, QSpinBox, QComboBox, QLabel, QPushButton,
-    QScrollArea, QFrame,
+    QScrollArea, QFrame, QSizePolicy,
 )
 
 from ..params import SeatParams, ControllerParams, RoadConfig, SimParams
@@ -43,6 +43,11 @@ def _ispin(value, lo, hi, step=1):
 
 class ParamPanel(QWidget):
     """Scrollable parameter-input panel occupying the left column of the GUI."""
+
+    # Signals emitted when run buttons are clicked
+    run_comparison_clicked = pyqtSignal()
+    run_all_controllers_clicked = pyqtSignal()
+    run_freq_sweep_clicked = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -198,6 +203,56 @@ class ParamPanel(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(scroll)
+
+        # --- Run buttons (always visible, below scroll area) ---
+        btn_box = QVBoxLayout()
+        btn_box.setSpacing(6)
+        btn_box.setContentsMargins(8, 6, 8, 8)
+
+        self.btn_run_comparison = QPushButton("▶  Run Comparison")
+        self.btn_run_comparison.setMinimumHeight(38)
+        self.btn_run_comparison.setStyleSheet(
+            "QPushButton { background-color: #2d8cf0; color: white; "
+            "font-weight: bold; font-size: 13px; border-radius: 6px; }"
+            "QPushButton:hover { background-color: #1a6fd1; }"
+            "QPushButton:pressed { background-color: #1260b8; }"
+        )
+        self.btn_run_comparison.clicked.connect(self.run_comparison_clicked)
+        btn_box.addWidget(self.btn_run_comparison)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(6)
+
+        self.btn_run_all = QPushButton("All Controllers")
+        self.btn_run_all.setMinimumHeight(32)
+        self.btn_run_all.setStyleSheet(
+            "QPushButton { background-color: #4a4a4a; color: white; "
+            "font-size: 12px; border-radius: 5px; }"
+            "QPushButton:hover { background-color: #5a5a5a; }"
+            "QPushButton:pressed { background-color: #3a3a3a; }"
+        )
+        self.btn_run_all.clicked.connect(self.run_all_controllers_clicked)
+        btn_row.addWidget(self.btn_run_all)
+
+        self.btn_run_freq = QPushButton("Freq Sweep")
+        self.btn_run_freq.setMinimumHeight(32)
+        self.btn_run_freq.setStyleSheet(
+            "QPushButton { background-color: #4a4a4a; color: white; "
+            "font-size: 12px; border-radius: 5px; }"
+            "QPushButton:hover { background-color: #5a5a5a; }"
+            "QPushButton:pressed { background-color: #3a3a3a; }"
+        )
+        self.btn_run_freq.clicked.connect(self.run_freq_sweep_clicked)
+        btn_row.addWidget(self.btn_run_freq)
+
+        btn_box.addLayout(btn_row)
+        outer.addLayout(btn_box)
+
+    def set_buttons_enabled(self, enabled: bool) -> None:
+        """Enable or disable all run buttons (e.g. while simulation is running)."""
+        self.btn_run_comparison.setEnabled(enabled)
+        self.btn_run_all.setEnabled(enabled)
+        self.btn_run_freq.setEnabled(enabled)
 
     # ------------------------------------------------------------------
     # Read / write dataclasses

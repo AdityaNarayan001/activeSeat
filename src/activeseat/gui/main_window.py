@@ -49,6 +49,11 @@ class MainWindow(QMainWindow):
         if scenario_path and os.path.isfile(scenario_path):
             self._load_scenario_file(scenario_path)
 
+        # Connect param panel run buttons
+        self.param_panel.run_comparison_clicked.connect(self._on_run_comparison)
+        self.param_panel.run_all_controllers_clicked.connect(self._on_run_all_controllers)
+        self.param_panel.run_freq_sweep_clicked.connect(self._on_run_freq_sweep)
+
     # ------------------------------------------------------------------
     # Menu bar
     # ------------------------------------------------------------------
@@ -205,6 +210,7 @@ class MainWindow(QMainWindow):
 
         self.progress_bar.setValue(0)
         self.progress_bar.setVisible(True)
+        self.param_panel.set_buttons_enabled(False)
         self.status_bar.showMessage(f"Running: {task} …")
         self._worker.start()
 
@@ -226,6 +232,7 @@ class MainWindow(QMainWindow):
 
     def _on_finished(self, data: dict):
         self.progress_bar.setVisible(False)
+        self.param_panel.set_buttons_enabled(True)
         task_type = data.get("type", "")
 
         if task_type == "comparison":
@@ -266,5 +273,6 @@ class MainWindow(QMainWindow):
 
     def _on_error(self, tb: str):
         self.progress_bar.setVisible(False)
+        self.param_panel.set_buttons_enabled(True)
         self.status_bar.showMessage("Simulation error!")
         QMessageBox.critical(self, "Simulation Error", tb)
