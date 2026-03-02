@@ -78,7 +78,7 @@ class AnimationWidget(QWidget):
         # Readout labels
         self._lbl_info = QLabel("t = 0.000 s  |  z_d = 0.00 mm  |  a_d = 0.00 m/s²  |  Fa = 0.0 N")
         self._lbl_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._lbl_info.setStyleSheet("font-family: monospace; font-size: 11px;")
+        self._lbl_info.setStyleSheet("font-family: 'Courier New', 'Menlo', monospace; font-size: 11px;")
         layout.addWidget(self._lbl_info)
 
         # Playback controls

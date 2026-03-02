@@ -90,6 +90,10 @@ def run_simulation(
 
     y0 = np.zeros(n_total)
 
+    # Allow controllers to provide non-zero initial states (e.g. MRAC warm-start)
+    if hasattr(ctrl, 'initial_ctrl_states') and n_ctrl > 0:
+        y0[5:5 + n_ctrl] = ctrl.initial_ctrl_states()
+
     t_eval = np.arange(0, sim.duration + sim.dt, sim.dt)
     # Clip t_eval to t_span to avoid floating-point overshoot
     t_eval = t_eval[t_eval <= sim.duration]

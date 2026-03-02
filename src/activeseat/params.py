@@ -46,7 +46,7 @@ class SeatParams:
     gear_ratio: float = 628.0        # N  [rad/m]  ball-screw (10 mm lead: 2π/0.01)
     max_torque: float = 5.0          # τ_max [N·m]  peak motor torque
     motor_inertia: float = 2e-5      # J_m [kg·m²]  rotor inertia (small servo)
-    viscous_friction: float = 0.01   # b_v [N·m·s/rad]  motor viscous friction
+    viscous_friction: float = 2e-4    # b_v [N·m·s/rad]  motor + ball-screw viscous friction
     coulomb_friction: float = 0.02   # τ_c [N·m]  Coulomb friction magnitude
     electrical_tau: float = 5e-3     # τ_e [s]  electrical time constant (1st-order lag)
 
@@ -83,7 +83,7 @@ class ControllerParams:
     #   For comfort: Q[3] (driver-seat disp) should dominate, since
     #   driver accel ≈ k2/md * x3.  Keep Q[1] low to allow seat stroke.
     Q_diag: List[float] = field(default_factory=lambda: [10.0, 700.0, 400000.0, 700.0])
-    R: float = 1e-4
+    R: float = 2e-5
 
     # --- H∞ parameters ----------------------------------------------------
     hinf_gamma: float = 5.0          # performance bound γ

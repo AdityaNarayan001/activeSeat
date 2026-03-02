@@ -59,7 +59,12 @@ class AdaptiveController(Controller):
     # ----- design ---------------------------------------------------------
 
     def design(self, A: np.ndarray, Bu: np.ndarray) -> None:
-        """Set up the reference model and Lyapunov adaptation matrices."""
+        """Set up the reference model, Lyapunov adaptation, and LQR warm-start.
+
+        The adaptive parameters θ are initialised to the negative LQR gain
+        (−K_force) so the controller starts from a known-good linear design
+        and then adapts online to plant–model mismatch.
+        """
         cp = self.ctrl_params
         self._Gamma = cp.adaptive_gamma_gain
         self._wn = cp.adaptive_ref_wn
@@ -77,7 +82,31 @@ class AdaptiveController(Controller):
         Q_lyap = np.eye(2) * 10.0
         self._P_lyap = solve_continuous_lyapunov(A_m.T, -Q_lyap)
         self._b_ref = b_m
+
+        # --- LQR warm-start for θ ---
+        # Solve CARE for same Q/R as LQR controller to get initial gain
+        from scipy.linalg import solve_continuous_are
+        Q_lqr = np.diag(cp.Q_diag)
+        R_lqr = np.atleast_2d(cp.R)
+        try:
+            P_lqr = solve_continuous_are(A, Bu, Q_lqr, R_lqr)
+            K_force = (np.linalg.solve(R_lqr, Bu.T @ P_lqr)).flatten()
+            # Adaptive law: Fa = θ · x  and LQR: Fa = -K · x  →  θ_0 = -K
+            self._theta_init = -K_force
+        except Exception:
+            self._theta_init = np.zeros(4)
+
         self._designed = True
+
+    def initial_ctrl_states(self) -> np.ndarray:
+        """Return initial controller states [x_ref, dx_ref, θ1..θ4].
+
+        θ values are warm-started from the LQR gain so the adaptive
+        controller doesn't start from zero.
+        """
+        if not self._designed:
+            return np.zeros(self._N_CTRL_STATES)
+        return np.concatenate([np.zeros(2), self._theta_init])
 
     # ----- compute (simplified, static snapshot) --------------------------
 

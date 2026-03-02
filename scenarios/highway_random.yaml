@@ -13,14 +13,14 @@ actuator:
   gear_ratio: 628.0
   max_torque: 5.0
   motor_inertia: 0.00002
-  viscous_friction: 0.01
+  viscous_friction: 0.0002
   coulomb_friction: 0.02
   electrical_tau: 0.005
 
 controller:
   controller_type: hinf
   Q_diag: [10.0, 700.0, 400000.0, 700.0]
-  R: 0.0001
+  R: 0.00002
   hinf_gamma: 5.0
   hinf_perf_weight_accel: 500.0
   hinf_perf_weight_force: 0.0001

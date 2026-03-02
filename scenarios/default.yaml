@@ -13,14 +13,14 @@ actuator:
   gear_ratio: 628.0         # rad/m — ball-screw (10 mm lead)
   max_torque: 5.0          # N·m — peak motor torque
   motor_inertia: 0.00002   # kg·m² — rotor inertia (small servo)
-  viscous_friction: 0.01   # N·m·s/rad
+  viscous_friction: 0.0002  # N·m·s/rad — realistic ball-screw servo
   coulomb_friction: 0.02   # N·m
   electrical_tau: 0.005    # s — electrical time constant
 
 controller:
   controller_type: lqr
   Q_diag: [10.0, 700.0, 400000.0, 700.0]
-  R: 0.0001
+  R: 0.00002
   hinf_gamma: 5.0
   hinf_perf_weight_accel: 500.0
   hinf_perf_weight_force: 0.0001

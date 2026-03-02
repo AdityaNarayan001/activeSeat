@@ -13,14 +13,14 @@ actuator:
   gear_ratio: 628.0
   max_torque: 8.0          # larger motor for heavy driver
   motor_inertia: 0.00003
-  viscous_friction: 0.01
+  viscous_friction: 0.0002
   coulomb_friction: 0.02
   electrical_tau: 0.005
 
 controller:
   controller_type: lqr
   Q_diag: [10.0, 1000.0, 600000.0, 1000.0]
-  R: 0.00008
+  R: 0.000015
   hinf_gamma: 5.0
   hinf_perf_weight_accel: 500.0
   hinf_perf_weight_force: 0.0001
