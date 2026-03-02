@@ -1,0 +1,52 @@
+# default.yaml — Standard 75 kg driver, moderate bump, LQR control
+# ================================================================
+
+seat:
+  mass_seat: 15.0          # kg — seat frame + cushion base
+  mass_driver: 75.0        # kg — driver body mass
+  k1: 20000.0              # N/m — primary suspension stiffness
+  c1: 1500.0               # N·s/m — primary suspension damping
+  k2: 50000.0              # N/m — cushion stiffness
+  c2: 2000.0               # N·s/m — cushion damping
+
+actuator:
+  gear_ratio: 628.0         # rad/m — ball-screw (10 mm lead)
+  max_torque: 5.0          # N·m — peak motor torque
+  motor_inertia: 0.00002   # kg·m² — rotor inertia (small servo)
+  viscous_friction: 0.01   # N·m·s/rad
+  coulomb_friction: 0.02   # N·m
+  electrical_tau: 0.005    # s — electrical time constant
+
+controller:
+  controller_type: lqr
+  Q_diag: [500000.0, 100.0, 1000000.0, 100.0]
+  R: 0.000001
+  hinf_gamma: 5.0
+  hinf_perf_weight_accel: 500.0
+  hinf_perf_weight_force: 0.0001
+  adaptive_gamma_gain: 500.0
+  adaptive_ref_wn: 12.0
+  adaptive_ref_zeta: 0.8
+
+road:
+  road_type: bump
+  bump_height: 0.05        # m — 50 mm bump
+  bump_length: 0.5         # m
+  vehicle_speed: 10.0      # m/s — ~36 km/h
+  sine_amplitude: 0.01
+  sine_frequency: 3.0
+  iso_class: C
+  iso_speed: 20.0
+  iso_seed: 42
+
+simulation:
+  duration: 2.0            # s
+  dt: 0.001                # s
+  solver: Radau
+  rtol: 1.0e-08
+  atol: 1.0e-10
+  max_step: 0.001
+  freq_start: 0.5
+  freq_end: 20.0
+  freq_points: 80
+  freq_steady_cycles: 10

@@ -1,0 +1,52 @@
+# heavy_driver_bump.yaml — 120 kg driver, large bump, aggressive LQR
+# ==================================================================
+
+seat:
+  mass_seat: 15.0
+  mass_driver: 120.0       # heavy driver
+  k1: 25000.0              # stiffer primary suspension
+  c1: 2000.0
+  k2: 50000.0
+  c2: 2500.0
+
+actuator:
+  gear_ratio: 628.0
+  max_torque: 8.0          # larger motor for heavy driver
+  motor_inertia: 0.00003
+  viscous_friction: 0.01
+  coulomb_friction: 0.02
+  electrical_tau: 0.005
+
+controller:
+  controller_type: lqr
+  Q_diag: [1000000.0, 200.0, 2000000.0, 200.0]
+  R: 0.0000005
+  hinf_gamma: 5.0
+  hinf_perf_weight_accel: 500.0
+  hinf_perf_weight_force: 0.0001
+  adaptive_gamma_gain: 500.0
+  adaptive_ref_wn: 12.0
+  adaptive_ref_zeta: 0.8
+
+road:
+  road_type: bump
+  bump_height: 0.10        # 100 mm — large bump
+  bump_length: 0.6
+  vehicle_speed: 8.0       # m/s — ~29 km/h (slower over big bump)
+  sine_amplitude: 0.01
+  sine_frequency: 3.0
+  iso_class: C
+  iso_speed: 20.0
+  iso_seed: 42
+
+simulation:
+  duration: 3.0
+  dt: 0.001
+  solver: Radau
+  rtol: 1.0e-08
+  atol: 1.0e-10
+  max_step: 0.001
+  freq_start: 0.5
+  freq_end: 20.0
+  freq_points: 80
+  freq_steady_cycles: 10

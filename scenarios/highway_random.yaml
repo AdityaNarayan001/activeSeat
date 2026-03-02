@@ -1,0 +1,52 @@
+# highway_random.yaml — 80 kg driver, ISO 8608 Class C road at 100 km/h, H∞
+# ==========================================================================
+
+seat:
+  mass_seat: 15.0
+  mass_driver: 80.0
+  k1: 20000.0
+  c1: 1500.0
+  k2: 50000.0
+  c2: 2000.0
+
+actuator:
+  gear_ratio: 628.0
+  max_torque: 5.0
+  motor_inertia: 0.00002
+  viscous_friction: 0.01
+  coulomb_friction: 0.02
+  electrical_tau: 0.005
+
+controller:
+  controller_type: hinf
+  Q_diag: [500000.0, 100.0, 1000000.0, 100.0]
+  R: 0.000001
+  hinf_gamma: 5.0
+  hinf_perf_weight_accel: 500.0
+  hinf_perf_weight_force: 0.0001
+  adaptive_gamma_gain: 500.0
+  adaptive_ref_wn: 12.0
+  adaptive_ref_zeta: 0.8
+
+road:
+  road_type: random
+  bump_height: 0.05
+  bump_length: 0.5
+  vehicle_speed: 10.0
+  sine_amplitude: 0.01
+  sine_frequency: 3.0
+  iso_class: C              # moderate roughness
+  iso_speed: 27.8           # ~100 km/h
+  iso_seed: 42
+
+simulation:
+  duration: 5.0             # longer for random road statistics
+  dt: 0.001
+  solver: Radau
+  rtol: 1.0e-08
+  atol: 1.0e-10
+  max_step: 0.001
+  freq_start: 0.5
+  freq_end: 20.0
+  freq_points: 80
+  freq_steady_cycles: 10
