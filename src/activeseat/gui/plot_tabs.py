@@ -42,18 +42,29 @@ class _CanvasTab(QWidget):
         self.canvas.draw_idle()
 
     def set_figure(self, fig: Figure):
-        """Replace the contents of this tab with an externally created Figure."""
-        self.figure.clear()
-        # Copy axes from the external figure
-        for src_ax in fig.axes:
-            ax = self.figure.add_subplot(111)  # placeholder
-            break
-        # Simpler approach: just swap the figure reference on the canvas
+        """Replace the contents of this tab with an externally created Figure.
+
+        Swaps the canvas to the new figure, closes the old one to prevent
+        memory leaks, and updates the toolbar reference.
+        """
+        import matplotlib.pyplot as plt
+
+        old_fig = self.figure
+        old_dpi = old_fig.get_dpi()
+
+        # Resize new figure to match canvas dimensions
+        w, h = self.canvas.get_width_height()
+        fig.set_dpi(old_dpi)
+        fig.set_size_inches(w / old_dpi, h / old_dpi)
+
+        # Point canvas at the new figure
+        self.figure = fig
         self.canvas.figure = fig
         fig.set_canvas(self.canvas)
-        fig.set_dpi(100)
-        fig.tight_layout()
         self.canvas.draw_idle()
+
+        # Close the old figure to free memory and pyplot state
+        plt.close(old_fig)
 
 
 class PlotTabs(QWidget):

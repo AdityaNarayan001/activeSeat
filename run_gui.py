@@ -14,6 +14,10 @@ import argparse
 # Ensure the src/ directory is on the import path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
+# Set matplotlib backend BEFORE any mpl imports (prevents macOS Tk conflicts)
+import matplotlib
+matplotlib.use("Agg")
+
 from PyQt6.QtWidgets import QApplication
 from activeseat.gui.main_window import MainWindow
 

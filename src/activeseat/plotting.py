@@ -41,7 +41,8 @@ def plot_time_histories(
     active: SimResult,
 ) -> Figure:
     """4-subplot figure: road input, seat disp, driver disp, driver accel."""
-    fig, axes = plt.subplots(4, 1, figsize=(12, 10), sharex=True)
+    fig, axes = plt.subplots(4, 1, figsize=(12, 10), sharex=True,
+                               layout="constrained")
 
     for res, ls, label, clr in [
         (passive, "--", passive.controller_name, _color(passive.controller_name)),
@@ -64,7 +65,6 @@ def plot_time_histories(
 
     axes[-1].set_xlabel("Time [ms]")
     fig.suptitle("Time-History Comparison", fontsize=13, fontweight="bold")
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
     return fig
 
 
@@ -74,7 +74,8 @@ def plot_time_histories(
 
 def plot_actuator_response(active: SimResult) -> Figure:
     """2-subplot: actuator force and motor torque over time."""
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 6), sharex=True)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 6), sharex=True,
+                                     layout="constrained")
     t = active.t * 1e3
     p = active.params
 
@@ -99,7 +100,6 @@ def plot_actuator_response(active: SimResult) -> Figure:
 
     fig.suptitle(f"Actuator Response — {active.controller_name}",
                  fontsize=13, fontweight="bold")
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
     return fig
 
 
@@ -114,7 +114,7 @@ def plot_transmissibility(
     active_name: str = "Active",
 ) -> Figure:
     """Bode-magnitude plot of transmissibility |z̈_d / z̈_0|."""
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(10, 6), layout="constrained")
 
     ax.semilogy(freqs, T_passive, "--", color=_color("Passive"), linewidth=1.5,
                 label="Passive")
@@ -127,7 +127,6 @@ def plot_transmissibility(
     ax.legend(fontsize=10)
     ax.grid(True, which="both", alpha=0.3)
     ax.set_xlim(freqs[0], freqs[-1])
-    fig.tight_layout()
     return fig
 
 
@@ -137,7 +136,8 @@ def plot_transmissibility(
 
 def plot_power_analysis(active: SimResult) -> Figure:
     """Instantaneous power and cumulative energy."""
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 6), sharex=True)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 6), sharex=True,
+                                     layout="constrained")
     t = active.t * 1e3
 
     ax1.plot(t, active.power, color=_color(active.controller_name), linewidth=0.8)
@@ -154,7 +154,6 @@ def plot_power_analysis(active: SimResult) -> Figure:
 
     fig.suptitle(f"Power Analysis — {active.controller_name}",
                  fontsize=13, fontweight="bold")
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
     return fig
 
 
@@ -173,7 +172,7 @@ def plot_metrics_comparison(
     p_vals = np.array([passive_metrics[k] for k in keys])
     a_vals = np.array([active_metrics[k] for k in keys])
 
-    fig, ax = plt.subplots(figsize=(14, 6))
+    fig, ax = plt.subplots(figsize=(14, 6), layout="constrained")
     x = np.arange(len(keys))
     w = 0.35
     ax.bar(x - w / 2, p_vals, w, label="Passive", color=_color("Passive"), alpha=0.85)
@@ -193,7 +192,6 @@ def plot_metrics_comparison(
     ax.set_title("Performance Metrics Comparison", fontsize=13, fontweight="bold")
     ax.legend()
     ax.grid(True, axis="y", alpha=0.3)
-    fig.tight_layout()
     return fig
 
 
@@ -208,7 +206,8 @@ def plot_controller_comparison(
     plus a bar chart of RMS driver accel."""
     names = list(results.keys())
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6),
-                                    gridspec_kw={"width_ratios": [2, 1]})
+                                    gridspec_kw={"width_ratios": [2, 1]},
+                                    layout="constrained")
 
     for name, res in results.items():
         ax1.plot(res.t * 1e3, res.accel_driver, _style(name),
@@ -232,7 +231,6 @@ def plot_controller_comparison(
                  f"{val:.3f}", ha="center", va="bottom", fontsize=8)
 
     fig.suptitle("Controller Comparison", fontsize=13, fontweight="bold")
-    fig.tight_layout(rect=[0, 0, 1, 0.95])
     return fig
 
 
@@ -249,7 +247,7 @@ def plot_parameter_sweep(
     active_name: str = "Active",
 ) -> Figure:
     """Line plot of one metric vs. one swept parameter."""
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(10, 6), layout="constrained")
     ax.plot(values, passive_metric_vals, "o--", color=_color("Passive"),
             label="Passive", linewidth=1.5, markersize=5)
     ax.plot(values, active_metric_vals, "s-", color=_color(active_name),
@@ -259,5 +257,4 @@ def plot_parameter_sweep(
     ax.set_title(f"Parameter Sweep: {param_name}", fontsize=13, fontweight="bold")
     ax.legend()
     ax.grid(True, alpha=0.3)
-    fig.tight_layout()
     return fig

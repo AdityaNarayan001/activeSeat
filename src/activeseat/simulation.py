@@ -206,6 +206,7 @@ def run_all_controllers(
     ctrl_params: ControllerParams,
     road_cfg: RoadConfig,
     sim: SimParams,
+    progress_callback: Callable[[float], None] | None = None,
 ) -> Dict[str, SimResult]:
     """Run passive + all three active controllers on the same road profile.
 
@@ -214,13 +215,19 @@ def run_all_controllers(
     road_func, _, _, _ = make_road_profile(road_cfg, sim)
     road_name = road_cfg.road_type
     results = {}
+    ctypes = ["passive", "lqr", "hinf", "adaptive"]
 
-    for ctype in ["passive", "lqr", "hinf", "adaptive"]:
+    for i, ctype in enumerate(ctypes):
+        if progress_callback is not None:
+            progress_callback(i / len(ctypes))
         ctrl = _make_controller(ctype, seat, ctrl_params)
         _design_controller(ctrl, seat)
         ctrl.reset()
         res = run_simulation(seat, ctrl, road_func, sim, road_name)
         results[ctrl.name] = res
+
+    if progress_callback is not None:
+        progress_callback(1.0)
 
     return results
 
@@ -279,6 +286,7 @@ def run_frequency_sweep(
     seat: SeatParams,
     ctrl_params: ControllerParams,
     sim: SimParams,
+    progress_callback: Callable[[float], None] | None = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Compute transmissibility by running sinusoidal sims at many frequencies.
 
@@ -295,6 +303,9 @@ def run_frequency_sweep(
     T_active = np.zeros_like(freqs)
 
     for i, f in enumerate(freqs):
+        if progress_callback is not None:
+            progress_callback(i / len(freqs))
+
         # Duration = enough cycles to reach steady state
         duration = max(sim.freq_steady_cycles / f, 0.5)
         local_sim = replace(sim, duration=duration)

@@ -49,10 +49,8 @@ class MainWindow(QMainWindow):
         if scenario_path and os.path.isfile(scenario_path):
             self._load_scenario_file(scenario_path)
 
-        # Connect param panel run buttons
-        self.param_panel.run_comparison_clicked.connect(self._on_run_comparison)
-        self.param_panel.run_all_controllers_clicked.connect(self._on_run_all_controllers)
-        self.param_panel.run_freq_sweep_clicked.connect(self._on_run_freq_sweep)
+        # Connect param panel run button
+        self.param_panel.run_clicked.connect(self._on_run)
 
     # ------------------------------------------------------------------
     # Menu bar
@@ -84,20 +82,10 @@ class MainWindow(QMainWindow):
         # ---- Run ----
         run_menu = mb.addMenu("Run")
 
-        act_comp = QAction("Passive vs Active Comparison", self)
-        act_comp.setShortcut("Ctrl+R")
-        act_comp.triggered.connect(self._on_run_comparison)
-        run_menu.addAction(act_comp)
-
-        act_all = QAction("All Controllers Comparison", self)
-        act_all.setShortcut("Ctrl+Shift+R")
-        act_all.triggered.connect(self._on_run_all_controllers)
-        run_menu.addAction(act_all)
-
-        act_freq = QAction("Frequency Sweep (Transmissibility)", self)
-        act_freq.setShortcut("Ctrl+T")
-        act_freq.triggered.connect(self._on_run_freq_sweep)
-        run_menu.addAction(act_freq)
+        act_run = QAction("Run Simulation", self)
+        act_run.setShortcut("Ctrl+R")
+        act_run.triggered.connect(self._on_run)
+        run_menu.addAction(act_run)
 
     # ------------------------------------------------------------------
     # Central widget
@@ -193,7 +181,8 @@ class MainWindow(QMainWindow):
     # Run simulations
     # ------------------------------------------------------------------
 
-    def _start_worker(self, task: str):
+    def _on_run(self):
+        """Start the full simulation pipeline."""
         if self._worker is not None and self._worker.isRunning():
             QMessageBox.information(self, "Busy", "A simulation is already running.")
             return
@@ -203,25 +192,18 @@ class MainWindow(QMainWindow):
         road = self.param_panel.get_road_config()
         sim = self.param_panel.get_sim_params()
 
-        self._worker = SimWorker(task, seat, ctrl, road, sim, parent=self)
+        self._worker = SimWorker(SimWorker.TASK_FULL, seat, ctrl, road, sim, parent=self)
         self._worker.progress.connect(self._on_progress)
+        self._worker.stage.connect(self._on_stage)
         self._worker.finished.connect(self._on_finished)
         self._worker.error.connect(self._on_error)
 
+        self.param_panel.set_run_enabled(False)
+        self.param_panel.set_progress(0, "Starting…")
         self.progress_bar.setValue(0)
         self.progress_bar.setVisible(True)
-        self.param_panel.set_buttons_enabled(False)
-        self.status_bar.showMessage(f"Running: {task} …")
+        self.status_bar.showMessage("Running simulation…")
         self._worker.start()
-
-    def _on_run_comparison(self):
-        self._start_worker(SimWorker.TASK_COMPARISON)
-
-    def _on_run_all_controllers(self):
-        self._start_worker(SimWorker.TASK_ALL_CTRL)
-
-    def _on_run_freq_sweep(self):
-        self._start_worker(SimWorker.TASK_FREQ_SWEEP)
 
     # ------------------------------------------------------------------
     # Worker callbacks
@@ -229,13 +211,48 @@ class MainWindow(QMainWindow):
 
     def _on_progress(self, val: float):
         self.progress_bar.setValue(int(val))
+        self.param_panel.set_progress(val)
+
+    def _on_stage(self, label: str):
+        self.param_panel.set_progress(self.progress_bar.value(), label)
+        self.status_bar.showMessage(label)
 
     def _on_finished(self, data: dict):
         self.progress_bar.setVisible(False)
-        self.param_panel.set_buttons_enabled(True)
+        self.param_panel.set_run_enabled(True)
         task_type = data.get("type", "")
 
-        if task_type == "comparison":
+        if task_type == "full":
+            passive = data["passive"]
+            active = data["active"]
+            results = data["all_results"]
+            freqs = data["freqs"]
+            T_p = data["T_passive"]
+            T_a = data["T_active"]
+
+            # Update all plot tabs
+            self.plot_tabs.update_time_histories(passive, active)
+            self.plot_tabs.update_actuator(active)
+            self.plot_tabs.update_power(active)
+            self.plot_tabs.update_transmissibility(
+                freqs, T_p, T_a, active.controller_name,
+            )
+            self.plot_tabs.update_controller_comparison(results)
+
+            # Update metrics
+            self.metrics_panel.update_comparison(passive, active)
+            self.metrics_panel.update_all_controllers(results)
+
+            # Animation
+            self.animation.set_result(active)
+            self.centre_tabs.setCurrentIndex(0)  # show animation
+            self.status_bar.showMessage(
+                f"Done — {active.controller_name} vs Passive on "
+                f"{active.road_type}. All controllers compared. "
+                f"Freq sweep complete."
+            )
+
+        elif task_type == "comparison":
             passive = data["passive"]
             active = data["active"]
             self.plot_tabs.update_time_histories(passive, active)
@@ -243,7 +260,7 @@ class MainWindow(QMainWindow):
             self.plot_tabs.update_power(active)
             self.metrics_panel.update_comparison(passive, active)
             self.animation.set_result(active)
-            self.centre_tabs.setCurrentIndex(0)  # show animation
+            self.centre_tabs.setCurrentIndex(0)
             self.status_bar.showMessage(
                 f"Done — Passive vs {active.controller_name} on {active.road_type}."
             )
@@ -273,6 +290,6 @@ class MainWindow(QMainWindow):
 
     def _on_error(self, tb: str):
         self.progress_bar.setVisible(False)
-        self.param_panel.set_buttons_enabled(True)
+        self.param_panel.set_run_enabled(True)
         self.status_bar.showMessage("Simulation error!")
         QMessageBox.critical(self, "Simulation Error", tb)
