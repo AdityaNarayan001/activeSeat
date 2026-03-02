@@ -19,8 +19,8 @@ actuator:
 
 controller:
   controller_type: lqr
-  Q_diag: [500000.0, 100.0, 1000000.0, 100.0]
-  R: 0.000001
+  Q_diag: [10.0, 700.0, 400000.0, 700.0]
+  R: 0.0001
   hinf_gamma: 5.0
   hinf_perf_weight_accel: 500.0
   hinf_perf_weight_force: 0.0001

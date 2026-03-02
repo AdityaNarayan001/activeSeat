@@ -80,8 +80,10 @@ class ControllerParams:
 
     # --- LQR weights ------------------------------------------------------
     #   Q = diag(Q_diag),  cost = ∫ (x'Qx + R u²) dt
-    Q_diag: List[float] = field(default_factory=lambda: [5e5, 100.0, 1e6, 100.0])
-    R: float = 1e-6
+    #   For comfort: Q[3] (driver-seat disp) should dominate, since
+    #   driver accel ≈ k2/md * x3.  Keep Q[1] low to allow seat stroke.
+    Q_diag: List[float] = field(default_factory=lambda: [10.0, 700.0, 400000.0, 700.0])
+    R: float = 1e-4
 
     # --- H∞ parameters ----------------------------------------------------
     hinf_gamma: float = 5.0          # performance bound γ
