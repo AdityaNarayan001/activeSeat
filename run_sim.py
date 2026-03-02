@@ -44,8 +44,8 @@ from activeseat import plotting as plotter
 def main():
     parser = argparse.ArgumentParser(description="ActiveSeat CLI Simulator")
     parser.add_argument("--scenario", "-s", type=str, default=None)
-    parser.add_argument("--save-plots", type=str, default=None,
-                        help="Directory to save plot PNGs.")
+    parser.add_argument("--save-plots", type=str, default="output",
+                        help="Directory to save plot PNGs (default: output/).")
     args = parser.parse_args()
 
     # -------------------------------------------------------------------
@@ -161,13 +161,7 @@ def main():
     print(f"  Max seat travel: {am['max_seat_travel']*1e3:.2f} mm")
     print(f"{'='*70}\n")
 
-    if not save_dir:
-        print("Tip: Re-run with --save-plots output/ to save all figures.")
-
-    # Show plots interactively if not saving
-    if not save_dir:
-        matplotlib.use("TkAgg")
-        plt.show()
+    print(f"\nAll plots saved to: {os.path.abspath(save_dir)}/")
 
 
 if __name__ == "__main__":
