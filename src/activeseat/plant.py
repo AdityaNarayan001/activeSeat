@@ -64,25 +64,6 @@ def build_state_space(p: SeatParams):
     k2, c2 = p.k2, p.c2
 
     # ---- A (4×4) ----
-    A = np.array([
-        [0.0,              1.0,              0.0,    0.0          ],
-        [-k1/ms,          -(c1 + c2)/ms,     k2/ms,  c2/ms       ],
-        [0.0,             -1.0,              0.0,    1.0          ],
-        [k1/md,            c2/md,           -k2/md, -(c2)/md     ],  # note: coupling via constraint
-    ])
-
-    # Correct row 3 (driver accel):
-    #   m_d · ẍ_d = -k2·x3 - c2·(x4 - x2)
-    #   ẍ_d = -k2/md · x3 - c2/md · x4 + c2/md · x2
-    # But x4_dot = ẍ_d and we already wrote ẋ3 = x4 - x2 (row index 2).
-    # Re-derive carefully:
-    #
-    #   ẋ1 = x2 - dz0          →  row 0: [0, 1, 0, 0] x + [0;-1] w
-    #   Wait — ẋ1 = ż_s - ż_0 = x2 - dz0  → so Bw enters here.
-    #
-    # Let's redo properly.
-    #   State: x1 = z_s - z_0,  x2 = ż_s,  x3 = z_d - z_s,  x4 = ż_d
-    #
     #   ẋ1 = ż_s - ż_0 = x2 - ż_0
     #   ẋ2 = z̈_s = (1/ms)[-k1 x1 - c1(x2 - ż_0) + k2 x3 + c2(x4-x2) + Fa]
     #   ẋ3 = ż_d - ż_s = x4 - x2

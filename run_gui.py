@@ -10,6 +10,14 @@ Usage:
 import sys
 import os
 import argparse
+import warnings
+
+# Silence harmless matplotlib layout-engine conflict warning
+warnings.filterwarnings(
+    "ignore",
+    message=".*layout engine that is incompatible with subplots_adjust.*",
+    category=UserWarning,
+)
 
 # Ensure the src/ directory is on the import path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))

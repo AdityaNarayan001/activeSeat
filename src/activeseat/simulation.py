@@ -2,11 +2,12 @@
 simulation.py — Integration engine for the 2-DOF seat suspension.
 
 Provides:
-    run_simulation          — single (controller, road) simulation
-    run_comparison          — passive vs one active controller
-    run_all_controllers     — passive + LQR + H∞ + adaptive on same road
-    run_parameter_sweep     — vary one parameter, collect metrics
-    run_frequency_sweep     — transmissibility via repeated sinusoidal runs
+    make_no_suspension_result — synthetic rigid-mount baseline (z_d = z₀)
+    run_simulation            — single (controller, road) simulation
+    run_comparison            — passive vs one active controller
+    run_all_controllers       — no-suspension + passive + LQR + H∞ + adaptive
+    run_parameter_sweep       — vary one parameter, collect metrics
+    run_frequency_sweep       — transmissibility via repeated sinusoidal runs
 """
 
 from __future__ import annotations
@@ -33,6 +34,50 @@ from .excitation import make_road_profile
 # ---------------------------------------------------------------------------
 # Simulation result container
 # ---------------------------------------------------------------------------
+
+def make_no_suspension_result(
+    road_func: Callable,
+    sim: SimParams,
+    seat: SeatParams,
+    road_type_name: str = "",
+) -> "SimResult":
+    """Create a synthetic *No Suspension* baseline.
+
+    The driver is rigidly bolted to the chassis (z_d = z_s = z₀), so there is
+    no relative motion, no actuator force, and no power consumption.  The
+    driver acceleration equals the road acceleration z̈₀.
+    """
+    t_eval = np.arange(0, sim.duration + sim.dt, sim.dt)
+    t_eval = t_eval[t_eval <= sim.duration]
+
+    z0 = np.zeros_like(t_eval)
+    dz0 = np.zeros_like(t_eval)
+    for i, ti in enumerate(t_eval):
+        z0[i], dz0[i] = road_func(ti)
+
+    # Finite-difference road acceleration
+    ddz0 = np.gradient(dz0, t_eval)
+
+    zeros = np.zeros_like(t_eval)
+
+    return SimResult(
+        controller_name="No Suspension",
+        road_type=road_type_name,
+        t=t_eval,
+        x1=zeros,       # seat–chassis relative = 0
+        x2=dz0.copy(),  # seat velocity = road velocity
+        x3=zeros,       # driver–seat relative = 0
+        x4=dz0.copy(),  # driver velocity = road velocity
+        tau_m=zeros,
+        z0=z0,
+        dz0=dz0,
+        z_s=z0.copy(),  # seat = road
+        z_d=z0.copy(),  # driver = road
+        accel_driver=ddz0,
+        Fa=zeros,
+        power=zeros,
+        params=seat,
+    )
 
 @dataclass
 class SimResult:
@@ -214,12 +259,19 @@ def run_all_controllers(
     """
     road_func, _, _, _ = make_road_profile(road_cfg, sim)
     road_name = road_cfg.road_type
-    results = {}
+    results: Dict[str, SimResult] = {}
+
+    # No-suspension baseline (rigid mount)
+    results["No Suspension"] = make_no_suspension_result(
+        road_func, sim, seat, road_name,
+    )
+
     ctypes = ["passive", "lqr", "hinf", "adaptive"]
+    total = len(ctypes) + 1  # +1 for no-suspension (already done)
 
     for i, ctype in enumerate(ctypes):
         if progress_callback is not None:
-            progress_callback(i / len(ctypes))
+            progress_callback((i + 1) / total)
         ctrl = _make_controller(ctype, seat, ctrl_params)
         _design_controller(ctrl, seat)
         ctrl.reset()
@@ -287,26 +339,39 @@ def run_frequency_sweep(
     ctrl_params: ControllerParams,
     sim: SimParams,
     progress_callback: Callable[[float], None] | None = None,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Compute transmissibility by running sinusoidal sims at many frequencies.
+) -> Dict[str, Tuple[np.ndarray, np.ndarray]]:
+    """Compute transmissibility for **all** controllers at many frequencies.
+
+    Sweeps Passive, LQR, H∞, and Adaptive via sinusoidal simulations.
+    No Suspension is analytic (T = 1.0 at every frequency).
 
     Returns
     -------
-    freqs        : (N,) frequencies [Hz]
-    T_passive    : (N,) passive transmissibility |z̈_d / z̈_0|
-    T_active     : (N,) active transmissibility
+    dict mapping controller_name → (freqs, T) where
+        freqs : (N,) frequencies [Hz]
+        T     : (N,) transmissibility |z̈_d / z̈_0|
     """
     from dataclasses import replace
 
     freqs = np.linspace(sim.freq_start, sim.freq_end, sim.freq_points)
-    T_passive = np.zeros_like(freqs)
-    T_active = np.zeros_like(freqs)
+
+    # Analytic rigid-mount baseline
+    freq_results: Dict[str, Tuple[np.ndarray, np.ndarray]] = {
+        "No Suspension": (freqs.copy(), np.ones_like(freqs)),
+    }
+
+    ctypes = ["passive", "lqr", "hinf", "adaptive"]
+    # Resolve display names once
+    display_names = {}
+    for ctype in ctypes:
+        c = _make_controller(ctype, seat, ctrl_params)
+        display_names[ctype] = c.name
+    T_arrays = {ctype: np.zeros_like(freqs) for ctype in ctypes}
+
+    total = len(ctypes) * len(freqs)
+    done = 0
 
     for i, f in enumerate(freqs):
-        if progress_callback is not None:
-            progress_callback(i / len(freqs))
-
-        # Duration = enough cycles to reach steady state
         duration = max(sim.freq_steady_cycles / f, 0.5)
         local_sim = replace(sim, duration=duration)
 
@@ -316,33 +381,38 @@ def run_frequency_sweep(
             sine_frequency=f,
         )
         road_func, _, _, _ = make_road_profile(road_cfg, local_sim)
-
-        # Passive
-        passive = PassiveController(seat, ctrl_params)
-        passive.design(np.zeros((4, 4)), np.zeros((4, 1)))
-        rp = run_simulation(seat, passive, road_func, local_sim, "sine")
-
-        # Active
-        ctrl = _make_controller(ctrl_params.controller_type, seat, ctrl_params)
-        _design_controller(ctrl, seat)
-        ra = run_simulation(seat, ctrl, road_func, local_sim, "sine")
-
-        # Transmissibility = RMS(z̈_d) / RMS(z̈_0)
-        # Use last 50% of data (steady state)
-        n_half = len(rp.t) // 2
-
-        # Road acceleration z̈_0 = -A·(2πf)²·sin(2πf·t)
         omega = 2 * np.pi * f
-        accel_road_p = -road_cfg.sine_amplitude * omega**2 * np.sin(omega * rp.t[n_half:])
-        accel_road_a = -road_cfg.sine_amplitude * omega**2 * np.sin(omega * ra.t[n_half:])
 
-        rms_road_p = np.sqrt(np.mean(accel_road_p**2))
-        rms_road_a = np.sqrt(np.mean(accel_road_a**2))
+        for ctype in ctypes:
+            if progress_callback is not None:
+                progress_callback(done / total)
 
-        rms_drv_p = np.sqrt(np.mean(rp.accel_driver[n_half:]**2))
-        rms_drv_a = np.sqrt(np.mean(ra.accel_driver[n_half:]**2))
+            try:
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", RuntimeWarning)
+                    ctrl = _make_controller(ctype, seat, ctrl_params)
+                    _design_controller(ctrl, seat)
+                    ctrl.reset()
+                    res = run_simulation(seat, ctrl, road_func, local_sim, "sine")
 
-        T_passive[i] = rms_drv_p / max(rms_road_p, 1e-12)
-        T_active[i] = rms_drv_a / max(rms_road_a, 1e-12)
+                # Transmissibility = RMS(z̈_d) / RMS(z̈_0) — last 50 % (steady state)
+                n_half = len(res.t) // 2
+                accel_road = -road_cfg.sine_amplitude * omega**2 * np.sin(
+                    omega * res.t[n_half:]
+                )
+                rms_road = np.sqrt(np.mean(accel_road**2))
+                rms_drv = np.sqrt(np.mean(res.accel_driver[n_half:]**2))
+                val = rms_drv / max(rms_road, 1e-12)
+                T_arrays[ctype][i] = val if np.isfinite(val) else np.nan
+            except Exception:
+                T_arrays[ctype][i] = np.nan  # mark failed point
+            done += 1
 
-    return freqs, T_passive, T_active
+    if progress_callback is not None:
+        progress_callback(1.0)
+
+    for ctype in ctypes:
+        freq_results[display_names[ctype]] = (freqs.copy(), T_arrays[ctype])
+
+    return freq_results

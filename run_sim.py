@@ -26,16 +26,13 @@ import matplotlib.pyplot as plt
 from activeseat.params import SeatParams, ControllerParams, RoadConfig, SimParams
 from activeseat.config import load_scenario
 from activeseat.simulation import (
-    run_comparison,
     run_all_controllers,
     run_frequency_sweep,
     run_parameter_sweep,
 )
 from activeseat.metrics import (
     compute_metrics,
-    compare_metrics,
     compare_all_controllers,
-    format_comparison_table,
     format_all_controllers_table,
 )
 from activeseat import plotting as plotter
@@ -81,62 +78,52 @@ def main():
             print(f"  Saved: {path}")
 
     # -------------------------------------------------------------------
-    # 2. Passive vs Active comparison
+    # 2. All controllers comparison (including No Suspension baseline)
     # -------------------------------------------------------------------
-    print("─── Passive vs Active Comparison ───")
-    passive, active = run_comparison(seat, ctrl, road, sim)
-    pm = compute_metrics(passive)
-    am = compute_metrics(active)
-    comp = compare_metrics(pm, am)
-    print(format_comparison_table(comp))
-
-    fig1 = plotter.plot_time_histories(passive, active)
-    _save(fig1, "time_histories")
-    fig2 = plotter.plot_actuator_response(active)
-    _save(fig2, "actuator_response")
-    fig3 = plotter.plot_power_analysis(active)
-    _save(fig3, "power_analysis")
-    fig4 = plotter.plot_metrics_comparison(pm, am, active.controller_name)
-    _save(fig4, "metrics_comparison")
-
-    # -------------------------------------------------------------------
-    # 3. All controllers comparison
-    # -------------------------------------------------------------------
-    print(f"\n─── All Controllers on {road.road_type} road ───")
+    print(f"─── All Controllers on {road.road_type} road ───")
     all_results = run_all_controllers(seat, ctrl, road, sim)
     all_metrics = compare_all_controllers(all_results)
     print(format_all_controllers_table(all_metrics))
 
+    fig1 = plotter.plot_time_histories(all_results)
+    _save(fig1, "time_histories")
+    fig2 = plotter.plot_actuator_response(all_results)
+    _save(fig2, "actuator_response")
+    fig3 = plotter.plot_power_analysis(all_results)
+    _save(fig3, "power_analysis")
+    fig4 = plotter.plot_metrics_comparison(all_metrics)
+    _save(fig4, "metrics_comparison")
     fig5 = plotter.plot_controller_comparison(all_results)
     _save(fig5, "controller_comparison")
 
     # -------------------------------------------------------------------
-    # 4. Frequency sweep (transmissibility)
+    # 3. Frequency sweep (transmissibility — all controllers)
     # -------------------------------------------------------------------
     print(f"\n─── Frequency Sweep ({sim.freq_start}–{sim.freq_end} Hz) ───")
-    freqs, T_p, T_a = run_frequency_sweep(seat, ctrl, sim)
-    fig6 = plotter.plot_transmissibility(freqs, T_p, T_a, ctrl.controller_type.upper())
+    freq_data = run_frequency_sweep(seat, ctrl, sim)
+    fig6 = plotter.plot_transmissibility(freq_data)
     _save(fig6, "transmissibility")
-    print(f"  Peak passive transmissibility: {T_p.max():.3f} at {freqs[T_p.argmax()]:.1f} Hz")
-    print(f"  Peak active transmissibility:  {T_a.max():.3f} at {freqs[T_a.argmax()]:.1f} Hz")
+    for name, (freqs, T) in freq_data.items():
+        print(f"  {name:16s} peak T = {T.max():.3f} at {freqs[T.argmax()]:.1f} Hz")
 
     # -------------------------------------------------------------------
-    # 5. Parameter sweep: driver mass 50–120 kg
+    # 4. Parameter sweep: driver mass 50–120 kg
     # -------------------------------------------------------------------
     print("\n─── Parameter Sweep: Driver Mass ───")
     masses = np.linspace(50, 120, 8)
     sweep = run_parameter_sweep("mass_driver", masses, seat, ctrl, road, sim)
     p_rms = np.array([compute_metrics(r[1])["rms_driver_accel"] for r in sweep])
     a_rms = np.array([compute_metrics(r[2])["rms_driver_accel"] for r in sweep])
-    fig7 = plotter.plot_parameter_sweep("mass_driver", masses, p_rms, a_rms,
-                                         "rms_driver_accel", ctrl.controller_type.upper())
+    sweep_metrics = {"Passive": p_rms, ctrl.controller_type.upper(): a_rms}
+    fig7 = plotter.plot_parameter_sweep("mass_driver", masses, sweep_metrics,
+                                        "rms_driver_accel")
     _save(fig7, "sweep_driver_mass")
     for val, prms, arms in zip(masses, p_rms, a_rms):
         print(f"  {val:.0f} kg  →  passive {prms:.3f}  active {arms:.3f}  "
               f"({(arms-prms)/prms*100:+.1f}%)")
 
     # -------------------------------------------------------------------
-    # 6. Engineering interpretation
+    # 5. Engineering interpretation
     # -------------------------------------------------------------------
     print(f"\n{'='*70}")
     print("  ENGINEERING SUMMARY")
@@ -148,7 +135,13 @@ def main():
     print(f"  Worst RMS driver accel: {worst_ctrl} "
           f"({all_metrics[worst_ctrl]['rms_driver_accel']:.4f} m/s²)")
 
-    # Check if saturation was hit
+    # Check if saturation was hit (use selected active controller)
+    active_name = ctrl.controller_type.upper() if ctrl.controller_type.lower() != "hinf" else "H∞"
+    if active_name in all_metrics:
+        am = all_metrics[active_name]
+    else:
+        # Fallback to first non-baseline
+        am = next(v for k, v in all_metrics.items() if k not in ("No Suspension", "Passive"))
     peak_force = am["peak_actuator_force"]
     if peak_force >= seat.max_force * 0.95:
         print(f"  ⚠ Actuator near saturation: peak force {peak_force:.0f} N "

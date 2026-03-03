@@ -45,7 +45,8 @@ class _CanvasTab(QWidget):
         """Replace the contents of this tab with an externally created Figure.
 
         Swaps the canvas to the new figure, closes the old one to prevent
-        memory leaks, and updates the toolbar reference.
+        memory leaks, and updates the toolbar reference.  Also connects
+        interactive legend toggling (click legend entry to hide/show traces).
         """
         import matplotlib.pyplot as plt
 
@@ -65,6 +66,44 @@ class _CanvasTab(QWidget):
 
         # Close the old figure to free memory and pyplot state
         plt.close(old_fig)
+
+        # Connect interactive legend toggling
+        self._connect_legend_toggle(fig)
+
+    def _connect_legend_toggle(self, fig: Figure):
+        """Wire up pick events so clicking a legend entry toggles traces.
+
+        Toggling propagates across all subplots that share the same
+        controller name, so one click hides/shows a controller everywhere.
+        """
+        # Disconnect any previous handler
+        if hasattr(self, "_legend_cid") and self._legend_cid is not None:
+            self.canvas.mpl_disconnect(self._legend_cid)
+            self._legend_cid = None
+
+        toggle = getattr(fig, "_legend_toggle", None)
+        if not toggle:
+            return
+
+        h2n = toggle["h2n"]
+        n2a = toggle["n2a"]
+        n2l = toggle["n2l"]
+
+        def _on_pick(event):
+            name = h2n.get(event.artist)
+            if not name:
+                return
+            artists = n2a.get(name, [])
+            if not artists:
+                return
+            visible = not artists[0].get_visible()
+            for a in artists:
+                a.set_visible(visible)
+            for lh in n2l.get(name, []):
+                lh.set_alpha(1.0 if visible else 0.2)
+            fig.canvas.draw_idle()
+
+        self._legend_cid = self.canvas.mpl_connect("pick_event", _on_pick)
 
 
 class PlotTabs(QWidget):
@@ -99,20 +138,21 @@ class PlotTabs(QWidget):
 
     # ---- Update methods --------------------------------------------------
 
-    def update_time_histories(self, passive: SimResult, active: SimResult):
-        fig = plt_mod.plot_time_histories(passive, active)
+    def update_time_histories(self, results: Dict[str, SimResult]):
+        fig = plt_mod.plot_time_histories(results)
         self._canvases[self.TAB_TIME].set_figure(fig)
 
-    def update_actuator(self, active: SimResult):
-        fig = plt_mod.plot_actuator_response(active)
+    def update_actuator(self, results: Dict[str, SimResult]):
+        fig = plt_mod.plot_actuator_response(results)
         self._canvases[self.TAB_ACTUATOR].set_figure(fig)
 
-    def update_transmissibility(self, freqs, T_p, T_a, name="Active"):
-        fig = plt_mod.plot_transmissibility(freqs, T_p, T_a, name)
+    def update_transmissibility(self, freq_data):
+        """freq_data: Dict[str, (freqs, T)] mapping controller → arrays."""
+        fig = plt_mod.plot_transmissibility(freq_data)
         self._canvases[self.TAB_TRANSMISSIBILITY].set_figure(fig)
 
-    def update_power(self, active: SimResult):
-        fig = plt_mod.plot_power_analysis(active)
+    def update_power(self, results: Dict[str, SimResult]):
+        fig = plt_mod.plot_power_analysis(results)
         self._canvases[self.TAB_POWER].set_figure(fig)
 
     def update_controller_comparison(self, results: Dict[str, SimResult]):

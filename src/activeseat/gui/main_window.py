@@ -214,73 +214,34 @@ class MainWindow(QMainWindow):
         task_type = data.get("type", "")
 
         if task_type == "full":
-            passive = data["passive"]
-            active = data["active"]
-            results = data["all_results"]
-            freqs = data["freqs"]
-            T_p = data["T_passive"]
-            T_a = data["T_active"]
+            results = data["results"]          # Dict[str, SimResult]
+            freq_data = data["freq_data"]      # Dict[str, (freqs, T)]
 
-            # Update all plot tabs
-            self.plot_tabs.update_time_histories(passive, active)
-            self.plot_tabs.update_actuator(active)
-            self.plot_tabs.update_power(active)
-            self.plot_tabs.update_transmissibility(
-                freqs, T_p, T_a, active.controller_name,
-            )
+            # Update all plot tabs with unified results
+            self.plot_tabs.update_time_histories(results)
+            self.plot_tabs.update_actuator(results)
+            self.plot_tabs.update_power(results)
+            self.plot_tabs.update_transmissibility(freq_data)
             self.plot_tabs.update_controller_comparison(results)
 
-            # Update metrics
-            self.metrics_panel.update_comparison(passive, active)
+            # Update metrics panel (single unified table)
             self.metrics_panel.update_all_controllers(results)
 
-            # Animation
-            self.animation.set_result(active)
+            # Animation — use best active controller
+            active_names = [n for n in results if n not in ("No Suspension", "Passive")]
+            if active_names:
+                from activeseat.metrics import compute_metrics
+                best = min(active_names,
+                           key=lambda n: compute_metrics(results[n])["rms_driver_accel"])
+                self.animation.set_result(results[best])
             self.centre_tabs.setCurrentIndex(0)  # show animation
+
+            road = next(iter(results.values())).road_type
             self.status_bar.showMessage(
-                f"Done — {active.controller_name} vs Passive on "
-                f"{active.road_type}. All controllers compared. "
-                f"Freq sweep complete."
+                f"Done — All 5 controllers on {road}. Freq sweep complete."
             )
-
-        elif task_type == "comparison":
-            passive = data["passive"]
-            active = data["active"]
-            self.plot_tabs.update_time_histories(passive, active)
-            self.plot_tabs.update_actuator(active)
-            self.plot_tabs.update_power(active)
-            self.metrics_panel.update_comparison(passive, active)
-            self.animation.set_result(active)
-            self.centre_tabs.setCurrentIndex(0)
-            self.status_bar.showMessage(
-                f"Done — Passive vs {active.controller_name} on {active.road_type}."
-            )
-
-        elif task_type == "all_controllers":
-            results = data["results"]
-            self.plot_tabs.update_controller_comparison(results)
-            self.metrics_panel.update_all_controllers(results)
-            # Use first active controller for animation
-            for name, res in results.items():
-                if name != "Passive":
-                    self.animation.set_result(res)
-                    break
-            self.centre_tabs.setCurrentIndex(1)  # show plots
-            self.plot_tabs.tabs.setCurrentIndex(self.plot_tabs.TAB_COMPARISON)
-            self.status_bar.showMessage("Done — All controllers compared.")
-
-        elif task_type == "freq_sweep":
-            freqs = data["freqs"]
-            T_p = data["T_passive"]
-            T_a = data["T_active"]
-            ctrl_name = self.param_panel.get_controller_params().controller_type.upper()
-            self.plot_tabs.update_transmissibility(freqs, T_p, T_a, ctrl_name)
-            self.centre_tabs.setCurrentIndex(1)
-            self.plot_tabs.tabs.setCurrentIndex(self.plot_tabs.TAB_TRANSMISSIBILITY)
-            self.status_bar.showMessage("Done — Frequency sweep complete.")
 
     def _on_error(self, tb: str):
-        self.progress_bar.setVisible(False)
         self.param_panel.set_run_enabled(True)
         self.status_bar.showMessage("Simulation error!")
         QMessageBox.critical(self, "Simulation Error", tb)

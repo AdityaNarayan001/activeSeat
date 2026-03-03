@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ..simulation import SimResult
-from ..metrics import compute_metrics, compare_metrics
+from ..metrics import compute_metrics
 
 
 # Metric display names and units
@@ -99,8 +99,8 @@ class MetricsPanel(QWidget):
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
 
-        # Summary cards (top 4 metrics)
-        cards_group = QGroupBox("Key Indicators (Active)")
+        # Summary cards (top 4 metrics — show best active controller)
+        cards_group = QGroupBox("Key Indicators (Best Active)")
         cards_grid = QGridLayout()
         self._cards: dict[str, _MetricCard] = {}
         card_keys = ["rms_driver_accel", "peak_driver_accel", "max_seat_travel", "avg_power"]
@@ -112,13 +112,10 @@ class MetricsPanel(QWidget):
         cards_group.setLayout(cards_grid)
         layout.addWidget(cards_group)
 
-        # Full comparison table
-        tbl_group = QGroupBox("Passive vs Active Comparison")
+        # All-controllers comparison table
+        tbl_group = QGroupBox("All Controllers Comparison")
         tbl_layout = QVBoxLayout()
         self.table = QTableWidget()
-        self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["Metric", "Passive", "Active", "Change"])
-        self.table.horizontalHeader().setStretchLastSection(True)
         self.table.verticalHeader().setVisible(False)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
@@ -126,76 +123,63 @@ class MetricsPanel(QWidget):
         tbl_group.setLayout(tbl_layout)
         layout.addWidget(tbl_group)
 
-        # All-controllers table
-        multi_group = QGroupBox("All Controllers")
-        multi_layout = QVBoxLayout()
-        self.multi_table = QTableWidget()
-        self.multi_table.verticalHeader().setVisible(False)
-        self.multi_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.multi_table.setAlternatingRowColors(True)
-        multi_layout.addWidget(self.multi_table)
-        multi_group.setLayout(multi_layout)
-        layout.addWidget(multi_group)
-
         layout.addStretch()
 
     # ------------------------------------------------------------------
     # Update from results
     # ------------------------------------------------------------------
 
-    def update_comparison(self, passive: SimResult, active: SimResult):
-        """Refresh cards and table from passive vs active results."""
-        pm = compute_metrics(passive)
-        am = compute_metrics(active)
-        comp = compare_metrics(pm, am)
-
-        # Update cards
-        for key, card in self._cards.items():
-            scale = _SCALE.get(key, 1.0)
-            _, unit = _DISPLAY.get(key, (key, ""))
-            card.set_value(am[key] * scale, unit, comp[key]["change_pct"])
-
-        # Update table
-        keys = list(pm.keys())
-        self.table.setRowCount(len(keys))
-        for row, key in enumerate(keys):
-            label, unit = _DISPLAY.get(key, (key, ""))
-            scale = _SCALE.get(key, 1.0)
-            pv = pm[key] * scale
-            av = am[key] * scale
-            pct = comp[key]["change_pct"]
-
-            self.table.setItem(row, 0, QTableWidgetItem(f"{label} [{unit}]"))
-            self.table.setItem(row, 1, QTableWidgetItem(f"{pv:.4f}"))
-            self.table.setItem(row, 2, QTableWidgetItem(f"{av:.4f}"))
-
-            pct_item = QTableWidgetItem(f"{pct:+.1f}%")
-            if pct < -5:
-                pct_item.setForeground(QColor("#2e7d32"))  # green
-            elif pct > 5:
-                pct_item.setForeground(QColor("#c62828"))  # red
-            else:
-                pct_item.setForeground(QColor("#f57f17"))  # yellow
-            self.table.setItem(row, 3, pct_item)
-
-        self.table.resizeColumnsToContents()
+    # Canonical controller order for columns
+    _COL_ORDER = ["No Suspension", "Passive", "LQR", "H∞", "Adaptive"]
 
     def update_all_controllers(self, results: Dict[str, SimResult]):
-        """Populate the all-controllers table."""
-        names = list(results.keys())
+        """Refresh cards and table from full results dict."""
         metrics = {n: compute_metrics(r) for n, r in results.items()}
+
+        # Ordered column names (only those present)
+        names = [n for n in self._COL_ORDER if n in metrics]
+        for n in metrics:
+            if n not in names:
+                names.append(n)
+
         keys = list(next(iter(metrics.values())).keys())
 
-        self.multi_table.setColumnCount(1 + len(names))
-        self.multi_table.setHorizontalHeaderLabels(["Metric"] + names)
-        self.multi_table.setRowCount(len(keys))
+        # --- Update summary cards with the best *active* controller ---
+        active_names = [n for n in names if n not in ("No Suspension", "Passive")]
+        if active_names:
+            best = min(active_names, key=lambda n: metrics[n]["rms_driver_accel"])
+            base = metrics.get("No Suspension", metrics.get("Passive"))
+            am = metrics[best]
+            for key, card in self._cards.items():
+                scale = _SCALE.get(key, 1.0)
+                _, unit = _DISPLAY.get(key, (key, ""))
+                bv = base[key] if base else 0.0
+                pct = ((am[key] - bv) / abs(bv) * 100) if abs(bv) > 1e-15 else None
+                card.set_value(am[key] * scale, unit, pct)
+
+        # --- Populate comparison table ---
+        self.table.setColumnCount(1 + len(names))
+        self.table.setHorizontalHeaderLabels(["Metric"] + names)
+        self.table.setRowCount(len(keys))
 
         for row, key in enumerate(keys):
             label, unit = _DISPLAY.get(key, (key, ""))
             scale = _SCALE.get(key, 1.0)
-            self.multi_table.setItem(row, 0, QTableWidgetItem(f"{label} [{unit}]"))
+            self.table.setItem(row, 0, QTableWidgetItem(f"{label} [{unit}]"))
             for col, name in enumerate(names, start=1):
                 val = metrics[name][key] * scale
-                self.multi_table.setItem(row, col, QTableWidgetItem(f"{val:.4f}"))
+                item = QTableWidgetItem(f"{val:.4f}")
 
-        self.multi_table.resizeColumnsToContents()
+                # Colour-code: compare each controller to "No Suspension" baseline
+                if "No Suspension" in metrics and name != "No Suspension":
+                    bv = metrics["No Suspension"][key]
+                    if abs(bv) > 1e-15:
+                        pct = (metrics[name][key] - bv) / abs(bv) * 100
+                        if pct < -5:
+                            item.setForeground(QColor("#2e7d32"))  # green
+                        elif pct > 5:
+                            item.setForeground(QColor("#c62828"))  # red
+
+                self.table.setItem(row, col, item)
+
+        self.table.resizeColumnsToContents()
